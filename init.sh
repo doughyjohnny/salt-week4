@@ -14,8 +14,6 @@ set -e
 
 cd install-config-files
 
-sh initial-setup-ubuntu-server.sh
-sh configure-static-ip.sh
 sh install-salt-master.sh
 
 cd ..
