@@ -18,6 +18,8 @@ sh initial-setup-ubuntu-server.sh
 sh configure-static-ip.sh
 sh install-salt-master.sh
 
+
+
 cd ..
 
 sudo cp -r salt /srv/

@@ -12,8 +12,6 @@ set -e
 #
 #
 
-# Set initial configs
-./initial-setup-ubuntu-server.sh
 
 # Download saltstack bootstrap install script
 curl -L https://bootstrap.saltstack.com -o install_salt.sh
