@@ -11,17 +11,13 @@ set -e
 # Description: Installation script Salt Minion
 #
 #
-# Make sure only root can run our script
-if [ $EUID -ne 0 ]; then
-  echo "This script must be run as root" 2>&1
-  exit 1
-fi
 
 # Download saltstack bootstrap install script
 curl -L https://bootstrap.saltstack.com -o install_salt.sh
 
 # Install Salt Minion
-master_ip="$(ip neigh | awk '{print $1}' | head -n 2 | tail -n 1)"
+master_ip="$(ip neigh | awk '{print $1}' | grep 141)"
+minion_ip="$(ifconfig | grep 'inet ' | head -n 1 | awk '{print $2}')"
 sudo sh install_salt.sh -P
 
 # Salt Master location
