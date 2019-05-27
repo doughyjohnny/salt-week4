@@ -13,19 +13,6 @@ set -e
 # Make sure only root can run our script
 [[ $EUID -ne 0 ]] && echo "This script must be run as root" 2>&1
 
-# Function to create new user
-f_newuser() {
-  read -p "Create new user? [y/n] " input
-  if [ "$input" == "y" ] ; then
-      read -p "Username: " name
-    sudo useradd "$name"
-    sudo passwd "$name"
-    f_superuser "$name"
-    f_switch_user "$name"
-    f_generate_key "$name"
-  fi
-}
-
 # Function to give user superuser privileges
 f_superuser() {
   read  -p "Give user superuser privileges? [y/n] " input
@@ -65,6 +52,19 @@ f_generate_key() {
   fi
 }
 
+# Function to create new user
+f_newuser() {
+  read -p "Create new user? [y/n] " input
+  if [ "$input" == "y" ] ; then
+    read -p "Username: " name
+    sudo useradd "$name"
+    sudo passwd "$name"
+    f_superuser "$name"
+    f_switch_user "$name"
+    f_generate_key "$name"
+  fi
+}
+
 ### Main ###
 echo "Welcome to this post-installation script for Ubuntu18.04"
 echo "This script automates setting the initial configurations"
@@ -72,8 +72,6 @@ echo "This script automates setting the initial configurations"
 # Create a new user?
 f_newuser
 
-# Upgrade the system
-sudo apt update && sudo apt upgrade -y
 
 # Setting Up Firewall
 #Allow OpenSSH firewall rule
