@@ -22,7 +22,7 @@ curl -L https://bootstrap.saltstack.com -o install_salt.sh
 sudo sh install_salt.sh -P -M
 
 # Create Salt Directories
-sudo mkdir -p /srv/{salt,pillar}
+sudo mkdir -p /srv/{salt,pillar,formulas}
 
 # Salt configuration
 # Set file_roots directory
