@@ -48,21 +48,21 @@ master_ip="$(ip addr | grep ' inet ' | awk '{print $2}' | tail -n 1 | cut -d'/' 
 minion01_ip="$(ip neigh | awk '{print $1}' | head -n 2 | tail -n 1)"
 
 # Resolv hosts
-sudo sed -i "2c|$master_ip    master      master.local|" /etc/hosts
-sudo sed -i "3c|$minion01_ip    minion01    minion01.local|" /etc/hosts
+# sudo sed -i "2c|$master_ip    master      master.local|" /etc/hosts
+# sudo sed -i "3c|$minion01_ip    minion01    minion01.local|" /etc/hosts
 
 # Create ssh-key
 ssh-keygen
-scp ~/.ssh/id_rsa.pub salt@minion01:~/.ssh/authorized_keys
+scp ~/.ssh/id_rsa.pub salt@saltminion01:~/.ssh/authorized_keys
 
 # Install Salt-Minion
-scp install-salt-minion.sh salt@minion01:~/
-ssh -t salt@minion01 "./install-salt-minion.sh -h now"
-ssh -t salt@minion01 "exit"
+scp install-salt-minion.sh salt@saltminion01:~/
+ssh -t salt@saltminion01 "./install-salt-minion.sh -h now"
+ssh -t salt@saltminion01 "exit"
 
 # Accept keys
-sudo salt-key -a master
-sudo salt-key -a minion01
+sudo salt-key -a saltmaster
+sudo salt-key -a saltminion01
 
 # Test communication
 sudo salt '*' test.ping
