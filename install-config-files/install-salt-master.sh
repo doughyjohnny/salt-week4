@@ -12,7 +12,10 @@ set -e
 #
 #
 # Make sure only root can run our script
-[[ $EUID -ne 0 ]] && echo "This script must be run as root" 2>&1
+if [ $EUID -ne 0 ]; then
+  echo "This script must be run as root" 2>&1
+  exit 1
+fi
 
 # Download saltstack bootstrap install script
 curl -L https://bootstrap.saltstack.com -o install_salt.sh

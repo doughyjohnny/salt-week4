@@ -11,16 +11,18 @@ set -e
 # Description: Init script
 #
 
+
 # Make sure only root can run our script
-[[ $EUID -ne 0 ]] && echo "This script must be run as root" 2>&1
+if [ $EUID -ne 0 ]; then
+  echo "This script must be run as root" 2>&1
+  exit 1
+fi
 
 cd install-config-files
 
 sh initial-setup-ubuntu-server.sh
 sh configure-static-ip.sh
 sh install-salt-master.sh
-
-
 
 cd ..
 

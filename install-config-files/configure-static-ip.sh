@@ -9,34 +9,25 @@ set -e
 #
 #
 # Make sure only root can run our script
-[[ $EUID -ne 0 ]] && echo "This script must be run as root" 2>&1
+if [ $EUID -ne 0 ]; then
+  echo "This script must be run as root" 2>&1
+  exit 1
+fi
 
 echo "Configuring static IP address..."
 sleep 1
 echo "Please enter the following..."
 sleep 1
-read -p "Interface: " interface
+read -p "Interface: " int
 echo ""
-read -p "IP address: " ipaddress
+read -p "IP address: " ip
 echo ""
-read -p "Default Gateway: " gateway
+read -p "Default Gateway: " gate
 echo ""
 
-cat <<EOT >> /etc/netplan/01-netcfg.yaml
-# This file describes the network interfaces available on your system
-# For more information, see netplan(5).
-network:
- version: 2
- renderer: networkd
- ethernets:
-   "$interface":
-     dhcp4: no
-     dhcp6: no
-     addresses: ["$ipaddress"/24]
-     gateway4: "$gateway"
-     nameservers:
-       addresses: [8.8.8.8,8.8.4.4]
+cat <<EOT >> /etc/network/interfaces
+auto "$int"
+iface "$int" inet static
+    address "$ip"/24
+    gateway "$gate"
 EOT
-
-# Apply new settings to networkd
-sudo netplan apply
