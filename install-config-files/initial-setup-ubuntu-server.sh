@@ -130,5 +130,4 @@ printf "\n"
 sudo apt upgrade -y
 printf "\n"
 
-# Set static ip address
-./configure-static-ip.sh
+
