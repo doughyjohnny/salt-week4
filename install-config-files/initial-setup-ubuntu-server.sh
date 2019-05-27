@@ -1,131 +1,77 @@
-#!/usr/bin/env bash
-set -e
-#
-#
-# Author: Alan Guit
-# Email: alanguit@tuta.io
-# Version: 0.1
-#
-#
-# Description: Initial configurations after a fresh Ubuntu server installation.
-#
-#
-# Make sure only root can run our script
-[[ $EUID -ne 0 ]] && echo "This script must be run as root" 2>&1
+#!/bin/bash
+set -euo pipefail
 
-# Function to give user superuser privileges
-f_superuser() {
-  read  -p "Give user superuser privileges? [y/n] " input
-    if [ "$input" == "y" ] ; then
-      sudo usermod -aG sudo "$1"
-    fi
-}
+########################
+### SCRIPT VARIABLES ###
+########################
 
-# Function to switch user account
-f_switch_user() {
-  read -p "Switch to new user? [y/n] " input
-  if [ "$input" == "y" ] ; then
-    su - "$1"
-  fi
-}
+# Name of the user to create and grant sudo privileges
+read -p "Username: " name
+USERNAME="$name"
 
-# Function to check timezone
-f_check_timezone() {
-  date
-  sleep 1
-}
+# Whether to copy over the root user's `authorized_keys` file to the new sudo
+# user.
+COPY_AUTHORIZED_KEYS_FROM_ROOT=true
 
-# Function to change timezone
-f_change_timezone() {
-  echo "Select new timezone"
-  timedatectl list-timezones
-  read -p "New timezone: " input
-  sudo timedatectl set-timezone "$input"
-  input=
-}
+# Additional public keys to add to the new sudo user
+# OTHER_PUBLIC_KEYS_TO_ADD=(
+#     "ssh-rsa AAAAB..."
+#     "ssh-rsa AAAAB..."
+# )
+OTHER_PUBLIC_KEYS_TO_ADD=(
+)
 
-# Function to generate SSH key
-f_generate_key() {
-  read -p "Generate ssh key? [y/n] " input
-  if [ "$input" == "y" ] ; then
-    ssh-keygen -t rsa -b 4096 -T ~/.ssh/"$1"-ssh_key -C "SSH key for $1"
-  fi
-}
+####################
+### SCRIPT LOGIC ###
+####################
 
-# Function to create new user
-f_newuser() {
-  read -p "Create new user? [y/n] " input
-  if [ "$input" == "y" ] ; then
-    read -p "Username: " name
-    sudo useradd "$name"
-    sudo passwd "$name"
-    f_superuser "$name"
-    f_switch_user "$name"
-  fi
-}
+# Add sudo user and grant privileges
+useradd --create-home --shell "/bin/bash" --groups sudo "${USERNAME}"
 
-### Main ###
-echo "Welcome to this post-installation script for Ubuntu18.04"
-echo "This script automates setting the initial configurations"
+# Check whether the root account has a real password set
+encrypted_root_pw="$(grep root /etc/shadow | cut --delimiter=: --fields=2)"
 
-# Create a new user?
-f_newuser
-f_generate_key
+if [ "${encrypted_root_pw}" != "*" ]; then
+    # Transfer auto-generated root password to user if present
+    # and lock the root account to password-based access
+    echo "${USERNAME}:${encrypted_root_pw}" | chpasswd --encrypted
+    passwd --lock root
+else
+    # Delete invalid password for user if using keys so that a new password
+    # can be set without providing a previous value
+    passwd --delete "${USERNAME}"
+fi
 
-# Setting Up Firewall
-#Allow OpenSSH firewall rule
-printf "Allowing OpenSSH...\n"
-printf "\n"
-sleep 1
-sudo ufw allow 2200/tcp
-# Enable the firewall
-printf "Enabling firewall...\n"
-printf "\n"
-sleep 1
-sudo ufw enable
-# Check status of the firewall
-printf "Checking firewall status...\n"
-printf "\n"
-sleep 1
-sudo ufw status
+# Expire the sudo user's password immediately to force a change
+chage --lastday 0 "${USERNAME}"
 
-# Check servertime and timezone
-while :
-do
-    f_check_timezone
-    read -p "Is current servertime correct? [y/n] " input
-    if [ "$input" == "y" ] ; then
-      break
-    fi
-    f_change_timezone
+# Create SSH directory for sudo user
+home_directory="$(eval echo ~${USERNAME})"
+mkdir --parents "${home_directory}/.ssh"
+
+# Copy `authorized_keys` file from root if requested
+if [ "${COPY_AUTHORIZED_KEYS_FROM_ROOT}" = true ]; then
+    cp /root/.ssh/authorized_keys "${home_directory}/.ssh"
+fi
+
+# Add additional provided public keys
+for pub_key in "${OTHER_PUBLIC_KEYS_TO_ADD[@]}"; do
+    echo "${pub_key}" >> "${home_directory}/.ssh/authorized_keys"
 done
 
-# Keeping Time In Sync
-sudo timedatectl set-ntp on
+ssh-keygen -t rsa -b 4096
 
-# Update Ubuntu
-printf "\n"
-printf "Updating repositories...\n"
-printf "\n"
-sudo apt update
-printf "\n"
+# Adjust SSH configuration ownership and permissions
+chmod 0700 "${home_directory}/.ssh"
+chmod 0600 "${home_directory}/.ssh/authorized_keys"
+chown --recursive "${USERNAME}":"${USERNAME}" "${home_directory}/.ssh"
 
-# Update Ubuntu
-printf "\n"
-printf "Checking dependencies...\n"
-printf "\n"
-for pkg in "curl wget git openssh-server"; do
-  if [ ! -x "$(command -v "$pkg")" ]; then
-    printf "Installling $pkg...\n"
-    sudo apt install "$pkg"
-  fi
-done
-printf "\n"
+# Disable root SSH login with password
+sed --in-place 's/^PermitRootLogin.*/PermitRootLogin prohibit-password/g' /etc/ssh/sshd_config
+if sshd -t -q; then
+    systemctl restart sshd
+fi
 
-# Upgrading packages
-printf "Upgrading packages...\n"
-printf "\n"
-sudo apt upgrade -y
-printf "\n"
-
-
+# Add exception for SSH and then enable UFW firewall
+ufw allow OpenSSH
+ufw --force enable
