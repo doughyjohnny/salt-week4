@@ -1,77 +1,109 @@
 #!/bin/bash
-set -euo pipefail
 
-########################
-### SCRIPT VARIABLES ###
-########################
+set -e
 
-# Name of the user to create and grant sudo privileges
-read -p "Username: " name
-USERNAME="$name"
+function getCurrentDir() {
+    local current_dir="${BASH_SOURCE%/*}"
+    if [[ ! -d "${current_dir}" ]]; then current_dir="$PWD"; fi
+    echo "${current_dir}"
+}
 
-# Whether to copy over the root user's `authorized_keys` file to the new sudo
-# user.
-COPY_AUTHORIZED_KEYS_FROM_ROOT=true
+function includeDependencies() {
+    # shellcheck source=./setupLibrary.sh
+    source "${current_dir}/setupLibrary.sh"
+}
 
-# Additional public keys to add to the new sudo user
-# OTHER_PUBLIC_KEYS_TO_ADD=(
-#     "ssh-rsa AAAAB..."
-#     "ssh-rsa AAAAB..."
-# )
-OTHER_PUBLIC_KEYS_TO_ADD=(
-)
+current_dir=$(getCurrentDir)
+includeDependencies
+output_file="output.log"
 
-####################
-### SCRIPT LOGIC ###
-####################
+function main() {
+    read -rp "Enter the username of the new user account:" username
 
-# Add sudo user and grant privileges
-useradd --create-home --shell "/bin/bash" --groups sudo "${USERNAME}"
+    promptForPassword
 
-# Check whether the root account has a real password set
-encrypted_root_pw="$(grep root /etc/shadow | cut --delimiter=: --fields=2)"
+    # Run setup functions
+    trap cleanup EXIT SIGHUP SIGINT SIGTERM
 
-if [ "${encrypted_root_pw}" != "*" ]; then
-    # Transfer auto-generated root password to user if present
-    # and lock the root account to password-based access
-    echo "${USERNAME}:${encrypted_root_pw}" | chpasswd --encrypted
-    passwd --lock root
-else
-    # Delete invalid password for user if using keys so that a new password
-    # can be set without providing a previous value
-    passwd --delete "${USERNAME}"
-fi
+    addUserAccount "${username}" "${password}"
 
-# Expire the sudo user's password immediately to force a change
-chage --lastday 0 "${USERNAME}"
+    read -rp $'Paste in the public SSH key for the new user:\n' sshKey
+    echo 'Running setup script...'
+    logTimestamp "${output_file}"
 
-# Create SSH directory for sudo user
-home_directory="$(eval echo ~${USERNAME})"
-mkdir --parents "${home_directory}/.ssh"
+    exec 3>&1 >>"${output_file}" 2>&1
+    disableSudoPassword "${username}"
+    addSSHKey "${username}" "${sshKey}"
+    changeSSHConfig
+    setupUfw
 
-# Copy `authorized_keys` file from root if requested
-if [ "${COPY_AUTHORIZED_KEYS_FROM_ROOT}" = true ]; then
-    cp /root/.ssh/authorized_keys "${home_directory}/.ssh"
-fi
+    if ! hasSwap; then
+        setupSwap
+    fi
 
-# Add additional provided public keys
-for pub_key in "${OTHER_PUBLIC_KEYS_TO_ADD[@]}"; do
-    echo "${pub_key}" >> "${home_directory}/.ssh/authorized_keys"
-done
+    setupTimezone
 
-ssh-keygen -t rsa -b 4096
+    echo "Installing Network Time Protocol... " >&3
+    configureNTP
 
-# Adjust SSH configuration ownership and permissions
-chmod 0700 "${home_directory}/.ssh"
-chmod 0600 "${home_directory}/.ssh/authorized_keys"
-chown --recursive "${USERNAME}":"${USERNAME}" "${home_directory}/.ssh"
+    sudo service ssh restart
 
-# Disable root SSH login with password
-sed --in-place 's/^PermitRootLogin.*/PermitRootLogin prohibit-password/g' /etc/ssh/sshd_config
-if sshd -t -q; then
-    systemctl restart sshd
-fi
+    cleanup
 
-# Add exception for SSH and then enable UFW firewall
-ufw allow OpenSSH
-ufw --force enable
+    echo "Setup Done! Log file is located at ${output_file}" >&3
+}
+
+function setupSwap() {
+    createSwap
+    mountSwap
+    tweakSwapSettings "10" "50"
+    saveSwapSettings "10" "50"
+}
+
+function hasSwap() {
+    [[ "$(sudo swapon -s)" == *"/swapfile"* ]]
+}
+
+function cleanup() {
+    if [[ -f "/etc/sudoers.bak" ]]; then
+        revertSudoers
+    fi
+}
+
+function logTimestamp() {
+    local filename=${1}
+    {
+        echo "==================="
+        echo "Log generated on $(date)"
+        echo "==================="
+    } >>"${filename}" 2>&1
+}
+
+function setupTimezone() {
+    echo -ne "Enter the timezone for the server (Default is 'Europe/Amsterdam'):\n" >&3
+    read -r timezone
+    if [ -z "${timezone}" ]; then
+        timezone="Europe/Amsterdam"
+    fi
+    setTimezone "${timezone}"
+    echo "Timezone is set to $(cat /etc/timezone)" >&3
+}
+
+# Keep prompting for the password and password confirmation
+function promptForPassword() {
+   PASSWORDS_MATCH=0
+   while [ "${PASSWORDS_MATCH}" -eq "0" ]; do
+       read -s -rp "Enter new UNIX password:" password
+       printf "\n"
+       read -s -rp "Retype new UNIX password:" password_confirmation
+       printf "\n"
+
+       if [[ "${password}" != "${password_confirmation}" ]]; then
+           echo "Passwords do not match! Please try again."
+       else
+           PASSWORDS_MATCH=1
+       fi
+   done
+}
+
+main
