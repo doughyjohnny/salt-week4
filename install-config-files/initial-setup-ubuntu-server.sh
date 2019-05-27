@@ -61,7 +61,6 @@ f_newuser() {
     sudo passwd "$name"
     f_superuser "$name"
     f_switch_user "$name"
-    f_generate_key "$name"
   fi
 }
 
@@ -71,7 +70,7 @@ echo "This script automates setting the initial configurations"
 
 # Create a new user?
 f_newuser
-
+f_generate_key
 
 # Setting Up Firewall
 #Allow OpenSSH firewall rule
