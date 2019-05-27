@@ -11,6 +11,8 @@ set -e
 # Description: Installation script Salt Master
 #
 #
+# Make sure only root can run our script
+[[ $EUID -ne 0 ]] && echo "This script must be run as root" 2>&1
 
 # Download saltstack bootstrap install script
 curl -L https://bootstrap.saltstack.com -o install_salt.sh

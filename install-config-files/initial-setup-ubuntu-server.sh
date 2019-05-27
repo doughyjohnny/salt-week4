@@ -10,7 +10,8 @@ set -e
 # Description: Initial configurations after a fresh Ubuntu server installation.
 #
 #
-
+# Make sure only root can run our script
+[[ $EUID -ne 0 ]] && echo "This script must be run as root" 2>&1
 
 # Function to create new user
 f_newuser() {

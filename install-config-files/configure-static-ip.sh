@@ -8,6 +8,8 @@ set -e
 # Version: 0.1
 #
 #
+# Make sure only root can run our script
+[[ $EUID -ne 0 ]] && echo "This script must be run as root" 2>&1
 
 echo "Configuring static IP address..."
 sleep 1
