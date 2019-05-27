@@ -13,4 +13,4 @@ set -e
 
 install-config-files/./install-salt-master.sh
 
-sudo cp salt/* /srv/salt/
+sudo cp -r salt /srv/
