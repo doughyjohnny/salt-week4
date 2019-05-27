@@ -11,6 +11,11 @@ set -e
 # Description: Init script
 #
 
-install-config-files/./install-salt-master.sh
+
+cd install-config-files
+
+sh install-salt-master.sh
+
+cd ..
 
 sudo cp -r salt /srv/
